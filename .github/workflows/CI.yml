@@ -314,3 +314,83 @@ jobs:
             releases/pi/*
           prerelease: true
           draft: true
+
+  build-archlinux:
+    name: Build Arch Linux package
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=8192
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup environment
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm nodejs yarn git electron
+      - name: Install dependencies
+        run: yarn install
+      - name: Build application
+        run: yarn run build
+      - name: Build Arch Linux package
+        run: |
+          makepkg -f
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          GIT_COMMIT_LOG=`git log -1 --format='%ci %H %s'`
+          PRODUCT_NAME=gSender
+          PACKAGE_NAME=`node -e "console.log(require('./src/package.json').name)"`
+          PACKAGE_VERSION=`node -e "console.log(require('./src/package.json').version)"`
+          mkdir -p releases/archlinux
+          cp -af *.pkg.tar.zst "releases/archlinux/${PACKAGE_NAME}-${PACKAGE_VERSION}-ArchLinux-x86_64.pkg.tar.zst"
+          ls -al releases/archlinux
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            releases/archlinux/*
+          prerelease: true
+          draft: true
+
+  build-nixos:
+    name: Build NixOS package
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=8192
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install Nix
+        uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build NixOS package
+        run: |
+          nix-build gsender.nix
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          GIT_COMMIT_LOG=`git log -1 --format='%ci %H %s'`
+          PRODUCT_NAME=gSender
+          PACKAGE_NAME=`node -e "console.log(require('./src/package.json').name)"`
+          PACKAGE_VERSION=`node -e "console.log(require('./src/package.json').version)"`
+          mkdir -p releases/nixos
+          cp -af result "releases/nixos/${PACKAGE_NAME}-${PACKAGE_VERSION}-NixOS-x86_64.tar.gz"
+          ls -al releases/nixos
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            releases/nixos/*
+          prerelease: true
+          draft: true
